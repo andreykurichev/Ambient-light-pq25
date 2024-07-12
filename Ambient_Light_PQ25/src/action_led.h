@@ -2,13 +2,15 @@
 #include <arduino.h>
 #include "settings.h"
 #include "avr_util.h"
-#include "crt_gamma8.h"
+#include "crt_gamma.h"
 
 namespace action_led
 {
   enum Possible_States
   {
     ALL_OFF,
+    REPETER_WRITE,
+    REPETER_RED,
     WRITE_ON,
     WRITE_OFF,
     RED_ON,
@@ -25,6 +27,9 @@ namespace action_led
   extern void setup();
   extern void loop();
 
-  extern void action(boolean door_states, uint8 light_states);
-  byte GammaCorrection(byte val);
-} //
+  extern void action_states(boolean door_message, uint8 light_message);
+  inline void action();
+  void led_switch();
+  byte GammaCorrection_White(byte val);
+  byte GammaCorrection_Red(byte val);
+}

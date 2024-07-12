@@ -2,12 +2,12 @@
 #include "custom_module.h"
 #include "avr_util.h"
 #include "passive_timer.h"
-#include "Adafruit_NeoPixel.h"
+#include <microLED.h>
 #include <avr/power.h>
 
 namespace action_led
 {
-  Adafruit_NeoPixel rgb_leds = Adafruit_NeoPixel(1, RGB_PIN, NEO_GRB + NEO_KHZ800);
+  microLED<1, RGB_PIN, MLED_NO_CLOCK, LED_WS2812, ORDER_GRB, CLI_AVER> rgb_leds;
   Possible_States current_state;
 
   uint8 White_Brigh;
@@ -15,6 +15,13 @@ namespace action_led
   uint8 light_Brigh;
 
   boolean Red_States_Flag;
+  boolean door_states;
+
+  /// @brief ///
+  boolean all_off_repeat_flag;
+  boolean repeat_write_flag;
+  boolean repeat_red_flag;
+  /// @brief ///
 
   void setup()
   {
@@ -24,128 +31,30 @@ namespace action_led
     PORTD &= ~H(WHITE_LED_PIN);
     White_Brigh = 0;
     Red_Brigh = 0;
+    light_Brigh = 0;
     Red_States_Flag = false;
-    rgb_leds.begin();
+    door_states = false;
+    all_off_repeat_flag = false;
+    repeat_write_flag = false;
+    repeat_red_flag = false;
   }
 
   // Периодически вызывается из основного цикла() для выполнения переходов между состояниями.
   void loop()
   {
-    switch (current_state)
-    {
-    case Possible_States::ALL_OFF:
-      White_Brigh = 0;
-      Red_Brigh = 0;
-      break;
-
-    case Possible_States::WRITE_ON:
-      static PassiveTimer white_update_on_timer;
-      if (white_update_on_timer.timeMillis() >= WHITE_UPDATE_PERIOD / WHITE_BRIGH_MAX)
-      {
-        white_update_on_timer.restart();
-        if (White_Brigh < WHITE_BRIGH_MAX)
-        {
-          White_Brigh++;
-        }
-        uint8 bright = GammaCorrection(White_Brigh);
-        rgb_leds.setPixelColor(0, WHITE_COLOR);
-        rgb_leds.setBrightness(bright);
-        analogWrite(WHITE_LED_PIN, bright);
-        rgb_leds.show();
-        Red_States_Flag = false;
-      }
-      break;
-
-    case Possible_States::WRITE_OFF:
-      static PassiveTimer white_update_off_timer;
-      if (white_update_off_timer.timeMillis() >= WHITE_UPDATE_PERIOD / WHITE_BRIGH_MAX)
-      {
-        white_update_off_timer.restart();
-        if (White_Brigh > WHITE_BRIGH_MIN)
-        {
-          White_Brigh--;
-        }
-        uint8 bright = GammaCorrection(White_Brigh);
-        rgb_leds.setPixelColor(0, WHITE_COLOR);
-        rgb_leds.setBrightness(bright);
-        analogWrite(WHITE_LED_PIN, bright);
-        rgb_leds.show();
-      }
-      break;
-
-    case Possible_States::RED_ON: // плавно включаем
-      static PassiveTimer red_update_on_timer;
-      if (red_update_on_timer.timeMillis() >= RED_UPDATE_PERIOD / RED_BRIGH_MAX)
-      {
-        red_update_on_timer.restart();
-        if (Red_Brigh < light_Brigh)
-        {
-          Red_Brigh++;
-          if (Red_Brigh == light_Brigh)
-          {
-            Red_States_Flag = true;
-          }
-        }
-        uint8 bright = GammaCorrection(Red_Brigh);
-        rgb_leds.setPixelColor(0, RED_COLOR);
-        rgb_leds.setBrightness(bright);
-        rgb_leds.show();
-      }
-      break;
-
-    case Possible_States::RED_OFF: // плавно выключаем
-      static PassiveTimer red_update_off_timer;
-      if (red_update_off_timer.timeMillis() >= RED_UPDATE_PERIOD / RED_BRIGH_MAX)
-      {
-        red_update_off_timer.restart();
-        if (Red_Brigh > RED_BRIGH_OFF)
-        {
-          Red_Brigh--;
-          if (Red_Brigh == RED_BRIGH_OFF)
-          {
-            Red_States_Flag = false;
-          }
-        }
-        uint8 bright = GammaCorrection(Red_Brigh);
-        rgb_leds.setPixelColor(0, RED_COLOR);
-        rgb_leds.setBrightness(bright);
-        rgb_leds.show();
-      }
-      break;
-
-    case Possible_States::RED_FAST_UP: // быстро прибовляем
-      if (Red_Brigh < light_Brigh)
-      {
-        Red_Brigh = light_Brigh;
-        uint8 bright = GammaCorrection(Red_Brigh);
-        rgb_leds.setPixelColor(0, RED_COLOR);
-        rgb_leds.setBrightness(bright);
-        rgb_leds.show();
-      }
-      break;
-
-    case Possible_States::RED_FAST_DOWN: // быстро убовляем
-      if (Red_Brigh > light_Brigh)
-      {
-        Red_Brigh = light_Brigh;
-        uint8 bright = GammaCorrection(Red_Brigh);
-        rgb_leds.setPixelColor(0, RED_COLOR);
-        rgb_leds.setBrightness(bright);
-        rgb_leds.show();
-      }
-      break;
-
-    case Possible_States::RED_FAST_OFF: // быстро выключаем
-      Red_Brigh = RED_BRIGH_OFF;
-      rgb_leds.setPixelColor(0, OFF);
-      rgb_leds.show();
-      break;
-    }
+    action();
+    led_switch();
   }
 
-  void action(boolean door_states, uint8 light_states)
+  void action_states(boolean door_message, uint8 light_message)
   {
-    if (door_states == false && light_states == 0) // все офф
+    door_states = door_message;
+    light_Brigh = light_message;
+  }
+
+  void action()
+  {
+    if (door_states == false && light_Brigh == 0) // все офф
     {
       if (White_Brigh == WHITE_BRIGH_MIN && Red_Brigh == RED_BRIGH_OFF)
       {
@@ -166,17 +75,19 @@ namespace action_led
         current_state = Possible_States::WRITE_ON;
         return;
       }
+      current_state = Possible_States::REPETER_WRITE;
+      return;
     }
+
     if (door_states == false) // дверь закрыта
     {
-      light_Brigh = light_states;
       if (White_Brigh > WHITE_BRIGH_MIN)
       {
         current_state = Possible_States::WRITE_OFF;
         return;
       }
 
-      else if (light_Brigh >= RED_BRIGH_MIN)
+      if (light_Brigh >= RED_BRIGH_MIN)
       {
         if (Red_Brigh < light_Brigh)
         {
@@ -185,35 +96,202 @@ namespace action_led
             current_state = Possible_States::RED_ON;
             return;
           }
+
           else
           {
             current_state = Possible_States::RED_FAST_UP;
             return;
           }
         }
+
         else if (Red_Brigh > light_Brigh)
         {
           current_state = Possible_States::RED_FAST_DOWN;
           return;
         }
+
         else
         {
+          current_state = Possible_States::REPETER_RED;
           return;
         }
       }
+
       else if (light_Brigh == 0)
       {
         if (Red_Brigh > RED_BRIGH_OFF)
         {
           current_state = Possible_States::RED_OFF;
+          all_off_repeat_flag = true;
         }
       }
     }
   }
 
-  // функция возвращает скорректированное по CRT значение
-  byte GammaCorrection(byte val)
+  void led_switch()
   {
-    return pgm_read_byte(&(CRTgamma8[val]));
+    switch (current_state)
+    {
+    case Possible_States::ALL_OFF:
+    {
+      static PassiveTimer all_off_repeat_timer;
+      White_Brigh = 0;
+      Red_Brigh = 0;
+      if (all_off_repeat_flag == true)
+      {
+        all_off_repeat_timer.restart();
+        all_off_repeat_flag = false;
+        break;
+      }
+      if (all_off_repeat_timer.timeMillis() >= REPEAT_PERIOD)
+      {
+        all_off_repeat_timer.restart();
+        analogWrite(WHITE_LED_PIN, WHITE_BRIGH_MIN);
+        rgb_leds.clear();
+        rgb_leds.show();
+      }
+      break;
+    }
+
+    case Possible_States::REPETER_WRITE:
+    {
+      static PassiveTimer repeat_write_timer;
+      if (repeat_red_flag == true)
+      {
+        repeat_write_timer.restart();
+        repeat_red_flag = false;
+        break;
+      }
+      if (repeat_write_timer.timeMillis() >= REPEAT_PERIOD)
+      {
+        repeat_write_timer.restart();
+        rgb_leds.fill(mRGB(WHITE_COLOR));
+        rgb_leds.setBrightness(WHITE_BRIGH_MAX);
+        analogWrite(WHITE_LED_PIN, WHITE_BRIGH_MAX);
+        rgb_leds.show();
+      }
+      break;
+    }
+    case Possible_States::REPETER_RED:
+    {
+      static PassiveTimer repeat_red_timer;
+      break;
+    }
+
+    case Possible_States::WRITE_ON:
+    {
+      static PassiveTimer white_update_on_timer;
+      if (white_update_on_timer.timeMillis() >= WHITE_UPDATE_PERIOD / WHITE_BRIGH_MAX)
+      {
+        white_update_on_timer.restart();
+        White_Brigh++;
+        uint8 bright = GammaCorrection_White(White_Brigh);
+        rgb_leds.fill(mRGB(WHITE_COLOR));
+        rgb_leds.setBrightness(bright);
+        analogWrite(WHITE_LED_PIN, bright);
+        rgb_leds.show();
+        Red_States_Flag = false;
+      }
+      if (White_Brigh == WHITE_BRIGH_MAX)
+      {
+        repeat_red_flag = true;
+      }
+      break;
+    }
+
+    case Possible_States::WRITE_OFF:
+    {
+      static PassiveTimer white_update_off_timer;
+      if (white_update_off_timer.timeMillis() >= WHITE_UPDATE_PERIOD / WHITE_BRIGH_MAX)
+      {
+        white_update_off_timer.restart();
+        White_Brigh--;
+        uint8 bright = GammaCorrection_White(White_Brigh);
+        rgb_leds.fill(mRGB(WHITE_COLOR));
+        rgb_leds.setBrightness(bright);
+        analogWrite(WHITE_LED_PIN, bright);
+        rgb_leds.show();
+      }
+      break;
+    }
+
+    case Possible_States::RED_ON: // плавно включаем
+    {
+      static PassiveTimer red_update_on_timer;
+      if (red_update_on_timer.timeMillis() >= RED_UPDATE_PERIOD / RED_BRIGH_MAX)
+      {
+        red_update_on_timer.restart();
+        Red_Brigh++;
+        uint8 bright = GammaCorrection_Red(Red_Brigh);
+        rgb_leds.fill(mRGB(RED_COLOR));
+        rgb_leds.setBrightness(bright);
+        rgb_leds.show();
+        if (Red_Brigh == light_Brigh)
+        {
+          Red_States_Flag = true;
+        }
+      }
+      break;
+    }
+
+    case Possible_States::RED_OFF: // плавно выключаем
+    {
+      static PassiveTimer red_update_off_timer;
+      if (red_update_off_timer.timeMillis() >= RED_UPDATE_PERIOD / RED_BRIGH_MAX)
+      {
+        red_update_off_timer.restart();
+        Red_Brigh--;
+        uint8 bright = GammaCorrection_Red(Red_Brigh);
+        rgb_leds.fill(mRGB(RED_COLOR));
+        rgb_leds.setBrightness(bright);
+        rgb_leds.show();
+        if (Red_Brigh == RED_BRIGH_OFF)
+        {
+          Red_States_Flag = false;
+        }
+      }
+      break;
+    }
+
+    case Possible_States::RED_FAST_UP: // быстро прибовляем
+    {
+      Red_Brigh = light_Brigh;
+      uint8 bright = GammaCorrection_Red(Red_Brigh);
+      rgb_leds.fill(mRGB(RED_COLOR));
+      rgb_leds.setBrightness(bright);
+      rgb_leds.show();
+      break;
+    }
+
+    case Possible_States::RED_FAST_DOWN: // быстро убовляем
+    {
+      Red_Brigh = light_Brigh;
+      uint8 bright = GammaCorrection_Red(Red_Brigh);
+      rgb_leds.fill(mRGB(RED_COLOR));
+      rgb_leds.setBrightness(bright);
+      rgb_leds.show();
+      break;
+    }
+
+    case Possible_States::RED_FAST_OFF: // быстро выключаем
+    {
+      Red_Brigh = RED_BRIGH_OFF;
+      rgb_leds.clear();
+      rgb_leds.show();
+      break;
+    }
+    }
+  }
+
+  // функция возвращает скорректированное по CRT значение
+  byte GammaCorrection_White(byte val)
+  {
+    return pgm_read_byte(&(CRTgamma_White[val]));
+  }
+
+  // функция возвращает скорректированное по CRT значение
+  byte GammaCorrection_Red(byte val)
+  {
+    return pgm_read_byte(&(CRTgamma_Red[val]));
   }
 } // пространство имен action_led

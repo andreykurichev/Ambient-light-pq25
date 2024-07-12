@@ -91,14 +91,14 @@ namespace custom_module
     {
       return;
     }
-    action_led::action(door_states, light_states);
+    action_led::action_states(door_states, light_states);
   }
 
   void no_frameArrived()
   {
     door_states = false;
     light_states = 0;
-    action_led::action(door_states, light_states);
+    action_led::action_states(door_states, light_states);
   }
 
 }

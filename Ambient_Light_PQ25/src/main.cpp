@@ -36,10 +36,7 @@ void loop()
     static PassiveTimer sleep_timer;
     static boolean bus_is_inactive;
 
-    const uint16 low_time_sleep = SHORT_BEFORE_SLEEP * 1000;
-    const uint32 high_time_sleep = LONG_BEFORE_SLEEP * 60000;
-    
-    uint32 sleep_time = (custom_module::door_states == false) ? low_time_sleep : high_time_sleep;
+    uint32 sleep_time = (custom_module::door_states == false) ? multiplication(SHORT_BEFORE_SLEEP, 1000) : multiplication(LONG_BEFORE_SLEEP, 60000);
     if (sleep_timer.timeMillis() >= sleep_time || custom_module::team_to_sleep == true)
     {
       bus_is_inactive = true;
