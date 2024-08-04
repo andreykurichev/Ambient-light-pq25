@@ -13,7 +13,7 @@ namespace custom_module
   void setup()
   {
     door_states = false;
-    light_states = 0;
+    light_states = RED_BRIGH_OFF;
     team_to_sleep = false;
     door_message_flag = false;
     light_message_flag = false;
@@ -77,9 +77,9 @@ namespace custom_module
         }
         else
         {
-          light_states = 0;
+          light_states = RED_BRIGH_OFF;
         }
-        light_states = constrain(light_states, 0, RED_BRIGH_MAX);
+        light_states = constrain(light_states, RED_BRIGH_OFF, RED_BRIGH_MAX);
       }
     }
   }
@@ -97,7 +97,7 @@ namespace custom_module
   void no_frameArrived()
   {
     door_states = false;
-    light_states = 0;
+    light_states = RED_BRIGH_OFF;
     action_led::action_states(door_states, light_states);
   }
 

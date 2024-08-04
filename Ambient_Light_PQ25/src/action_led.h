@@ -9,8 +9,8 @@ namespace action_led
   enum Possible_States
   {
     ALL_OFF,
-    REPETER_WRITE,
-    REPETER_RED,
+    REPEAT_WRITE,
+    REPEAT_RED,
     WRITE_ON,
     WRITE_OFF,
     RED_ON,

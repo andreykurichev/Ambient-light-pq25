@@ -45,7 +45,7 @@ void loop()
       custom_module::no_frameArrived();
       sleep_timer.restart();
     }
-    if (bus_is_inactive == true && action_led::White_Brigh == WHITE_BRIGH_MIN && action_led::Red_Brigh == RED_BRIGH_OFF)
+    if (bus_is_inactive == true && action_led::White_Brigh == WHITE_BRIGH_OFF && action_led::Red_Brigh == RED_BRIGH_OFF)
     {
       sleep_set::go_sleep();
       bus_is_inactive = false;

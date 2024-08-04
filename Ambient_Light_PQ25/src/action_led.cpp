@@ -16,12 +16,8 @@ namespace action_led
 
   boolean Red_States_Flag;
   boolean door_states;
-
-  /// @brief ///
-  boolean all_off_repeat_flag;
   boolean repeat_write_flag;
   boolean repeat_red_flag;
-  /// @brief ///
 
   void setup()
   {
@@ -29,14 +25,11 @@ namespace action_led
     PORTD |= H(PWR_RGB_PIN);
     DDRD |= H(WHITE_LED_PIN);
     PORTD &= ~H(WHITE_LED_PIN);
-    White_Brigh = 0;
-    Red_Brigh = 0;
-    light_Brigh = 0;
+    White_Brigh = WHITE_BRIGH_OFF;
+    Red_Brigh = RED_BRIGH_OFF;
+    light_Brigh = RED_BRIGH_OFF;
     Red_States_Flag = false;
     door_states = false;
-    all_off_repeat_flag = false;
-    repeat_write_flag = false;
-    repeat_red_flag = false;
   }
 
   // Периодически вызывается из основного цикла() для выполнения переходов между состояниями.
@@ -54,9 +47,9 @@ namespace action_led
 
   void action()
   {
-    if (door_states == false && light_Brigh == 0) // все офф
+    if (door_states == false && light_Brigh == RED_BRIGH_OFF) // все офф
     {
-      if (White_Brigh == WHITE_BRIGH_MIN && Red_Brigh == RED_BRIGH_OFF)
+      if (White_Brigh == WHITE_BRIGH_OFF && Red_Brigh == RED_BRIGH_OFF)
       {
         current_state = Possible_States::ALL_OFF;
         return;
@@ -75,13 +68,13 @@ namespace action_led
         current_state = Possible_States::WRITE_ON;
         return;
       }
-      current_state = Possible_States::REPETER_WRITE;
+      current_state = Possible_States::REPEAT_WRITE; // NO_ACTION;
       return;
     }
 
     if (door_states == false) // дверь закрыта
     {
-      if (White_Brigh > WHITE_BRIGH_MIN)
+      if (White_Brigh > WHITE_BRIGH_OFF)
       {
         current_state = Possible_States::WRITE_OFF;
         return;
@@ -112,17 +105,16 @@ namespace action_led
 
         else
         {
-          current_state = Possible_States::REPETER_RED;
+          current_state = Possible_States::REPEAT_RED;
           return;
         }
       }
 
-      else if (light_Brigh == 0)
+      else if (light_Brigh == RED_BRIGH_OFF)
       {
         if (Red_Brigh > RED_BRIGH_OFF)
         {
           current_state = Possible_States::RED_OFF;
-          all_off_repeat_flag = true;
         }
       }
     }
@@ -135,46 +127,45 @@ namespace action_led
     case Possible_States::ALL_OFF:
     {
       static PassiveTimer all_off_repeat_timer;
-      White_Brigh = 0;
-      Red_Brigh = 0;
-      if (all_off_repeat_flag == true)
-      {
-        all_off_repeat_timer.restart();
-        all_off_repeat_flag = false;
-        break;
-      }
       if (all_off_repeat_timer.timeMillis() >= REPEAT_PERIOD)
       {
         all_off_repeat_timer.restart();
-        analogWrite(WHITE_LED_PIN, WHITE_BRIGH_MIN);
+        White_Brigh = WHITE_BRIGH_OFF;
+        Red_Brigh = RED_BRIGH_OFF;
         rgb_leds.clear();
+        PORTD &= ~H(WHITE_LED_PIN);
         rgb_leds.show();
       }
       break;
     }
 
-    case Possible_States::REPETER_WRITE:
+    case Possible_States::REPEAT_WRITE:
     {
-      static PassiveTimer repeat_write_timer;
-      if (repeat_red_flag == true)
+      static PassiveTimer white_repeat_timer;
+      if (white_repeat_timer.timeMillis() >= REPEAT_PERIOD)
       {
-        repeat_write_timer.restart();
-        repeat_red_flag = false;
-        break;
-      }
-      if (repeat_write_timer.timeMillis() >= REPEAT_PERIOD)
-      {
-        repeat_write_timer.restart();
+        white_repeat_timer.restart();
+        uint8 bright = GammaCorrection_White(White_Brigh);
         rgb_leds.fill(mRGB(WHITE_COLOR));
-        rgb_leds.setBrightness(WHITE_BRIGH_MAX);
-        analogWrite(WHITE_LED_PIN, WHITE_BRIGH_MAX);
+        rgb_leds.setBrightness(bright);
+        analogWrite(WHITE_LED_PIN, bright);
         rgb_leds.show();
       }
       break;
     }
-    case Possible_States::REPETER_RED:
+
+    case Possible_States::REPEAT_RED:
     {
-      static PassiveTimer repeat_red_timer;
+      static PassiveTimer red_repeat_timer;
+      if (red_repeat_timer.timeMillis() >= REPEAT_PERIOD)
+      {
+        red_repeat_timer.restart();
+        uint8 bright = GammaCorrection_Red(Red_Brigh);
+        rgb_leds.fill(mRGB(RED_COLOR));
+        rgb_leds.setBrightness(bright);
+        PORTD &= ~H(WHITE_LED_PIN);
+        rgb_leds.show();
+      }
       break;
     }
 
@@ -191,10 +182,6 @@ namespace action_led
         analogWrite(WHITE_LED_PIN, bright);
         rgb_leds.show();
         Red_States_Flag = false;
-      }
-      if (White_Brigh == WHITE_BRIGH_MAX)
-      {
-        repeat_red_flag = true;
       }
       break;
     }
@@ -225,6 +212,7 @@ namespace action_led
         uint8 bright = GammaCorrection_Red(Red_Brigh);
         rgb_leds.fill(mRGB(RED_COLOR));
         rgb_leds.setBrightness(bright);
+        PORTD &= ~H(WHITE_LED_PIN);
         rgb_leds.show();
         if (Red_Brigh == light_Brigh)
         {
@@ -244,6 +232,7 @@ namespace action_led
         uint8 bright = GammaCorrection_Red(Red_Brigh);
         rgb_leds.fill(mRGB(RED_COLOR));
         rgb_leds.setBrightness(bright);
+        PORTD &= ~H(WHITE_LED_PIN);
         rgb_leds.show();
         if (Red_Brigh == RED_BRIGH_OFF)
         {
@@ -259,6 +248,7 @@ namespace action_led
       uint8 bright = GammaCorrection_Red(Red_Brigh);
       rgb_leds.fill(mRGB(RED_COLOR));
       rgb_leds.setBrightness(bright);
+      PORTD &= ~H(WHITE_LED_PIN);
       rgb_leds.show();
       break;
     }
@@ -269,6 +259,7 @@ namespace action_led
       uint8 bright = GammaCorrection_Red(Red_Brigh);
       rgb_leds.fill(mRGB(RED_COLOR));
       rgb_leds.setBrightness(bright);
+      PORTD &= ~H(WHITE_LED_PIN);
       rgb_leds.show();
       break;
     }
@@ -277,6 +268,7 @@ namespace action_led
     {
       Red_Brigh = RED_BRIGH_OFF;
       rgb_leds.clear();
+      PORTD &= ~H(WHITE_LED_PIN);
       rgb_leds.show();
       break;
     }
